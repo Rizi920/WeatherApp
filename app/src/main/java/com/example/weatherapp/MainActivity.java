@@ -1,6 +1,8 @@
 package com.example.weatherapp;
 
 import android.databinding.DataBindingUtil;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -8,8 +10,13 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.example.weatherapp.databinding.ActivityMainBinding;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -22,15 +29,14 @@ import java.net.URLConnection;
 
 public class MainActivity extends AppCompatActivity {
     String tag = "LifeCycleEvents";
+    final String DEGREE  = "\u00b0";
 
     private ActivityMainBinding activityMainBinding;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        activityMainBinding= DataBindingUtil.setContentView(this,R.layout.activity_main);
-        WeatherInfo obj=new WeatherInfo("Cloudy","12.4","13.2");
-        activityMainBinding.setWeatherInfo(obj);
+
 
         final EditText latitude = (EditText) findViewById(R.id.etLatitude);
         final EditText longitude = (EditText) findViewById(R.id.etLongitude);
@@ -80,16 +86,80 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("result: ","------------------------>"+result);
                 return result;
 
-
             } catch (MalformedURLException e) {
+
                 e.printStackTrace();
             } catch (IOException e) {
+
                 e.printStackTrace();
             }
 
             return null;
     }
 
+        protected void onPostExecute(String result){
+            try{
+
+                JSONObject jsonObject =new JSONObject(result);
+            JSONArray jsonArray = jsonObject.getJSONArray("weather");
+            String iconUrl=null;
+            String desc=null;
+            String description;
+            for (int i = 0; i < jsonArray.length(); i++)
+            {
+                iconUrl = jsonArray.getJSONObject(i).getString("icon");
+                 desc = jsonArray.getJSONObject(i).getString("description");
+                Log.e("icon_url:------->",iconUrl);
+            }
+                char[] chars = desc.toCharArray();
+                chars[0] = Character.toUpperCase(chars[0]);
+                description= new String(chars);
+                String imgUrl="http://openweathermap.org/img/w/"+iconUrl+".png";
+                float tempMin=(float)(Float.valueOf(jsonObject.getJSONObject("main").getString("temp_min"))-272.15);
+                float tempMax=(float)(Float.valueOf(jsonObject.getJSONObject("main").getString("temp_max"))-272.15);
+                float temp=(float)(Float.valueOf(jsonObject.getJSONObject("main").getString("temp"))-272.15);
+
+                new DownloadImageTask().execute(imgUrl);
+                activityMainBinding= DataBindingUtil.setContentView(MainActivity.this,R.layout.activity_main);
+                WeatherInfo obj=new WeatherInfo(description+" ("+temp+DEGREE+"C)", "Min: "+String.valueOf(tempMin)+DEGREE+"C","Max: "+String.valueOf(tempMax)+DEGREE+"C");
+                activityMainBinding.setWeatherInfo(obj);
+
+            }catch (Exception x){
+                x.printStackTrace();
+            }
+    }
+    }
+
+
+
+    private class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
+
+        protected Bitmap doInBackground(String... urls) {
+            try {
+                return loadImageFromNetwork(urls[0]);
+            } catch (MalformedURLException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (IOException e) {
+
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        protected void onPostExecute(Bitmap result) {
+
+            ImageView mImageView = (ImageView) findViewById(R.id.imvIcon);
+            mImageView.setImageBitmap(result);
+        }
+
+        private Bitmap loadImageFromNetwork(String url)
+                throws MalformedURLException, IOException {
+            Bitmap bitmap = BitmapFactory.decodeStream((InputStream) new URL(
+                    url).getContent());
+            return bitmap;
+        }
     }
 
     @Override
