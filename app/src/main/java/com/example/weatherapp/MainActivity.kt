@@ -1,138 +1,137 @@
 package com.example.weatherapp
 
 import android.content.Context
-import android.databinding.DataBindingUtil
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
 import android.os.AsyncTask
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import android.view.View
-import android.widget.Button
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
-
-import com.example.weatherapp.databinding.ActivityMainBinding
-
-import org.json.JSONArray
-import org.json.JSONObject
-
-import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStream
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.MalformedURLException
 import java.net.URL
-import java.net.URLConnection
-import java.net.UnknownHostException
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+
 
 class MainActivity : AppCompatActivity() {
-    internal var tag = "LifeCycleEvents"
+
+    //Variables used in the class
     internal val DEGREE = "\u00b0"
 
-    private var activityMainBinding: ActivityMainBinding? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
     }
 
-
+    //onclick method of the btn "forecast" in the main activity
     fun btnOnClick(view: View) {
         val latitude = findViewById<View>(R.id.etLatitude) as EditText
         val longitude = findViewById<View>(R.id.etLongitude) as EditText
+
+        //check if phone is connected to the network
         if (!isNetworkAvailable(applicationContext) == true) {
             Toast.makeText(applicationContext, "No Internet, Please connect to a Network", Toast.LENGTH_LONG).show()
-        }
-        val lat = latitude.text.toString()
-        val lon = longitude.text.toString()
-        if (lat.equals("", ignoreCase = true) || lon.equals("", ignoreCase = true)) {
-            Toast.makeText(applicationContext, "Please Enter latitude and longitude to get the forecast!", Toast.LENGTH_LONG).show()
         } else {
-            val URL1 = "http://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&APPID=4f6f268a496ed32149b37570e57bef91"
-            GetWeatherData().execute(URL1)
-        }
-    }
 
+            //get user input values from the UI fields "longitude" & "latitude"
+            val lat = latitude.text.toString()
+            val lon = longitude.text.toString()
 
-    private inner class GetWeatherData : AsyncTask<String, Void, String>() {
-
-        override fun doInBackground(vararg urls: String): String? {
-            var result = ""
-            val url: URL
-            var urlConnection: HttpURLConnection? = null
-
-            try {
-                url = URL(urls[0])
-                urlConnection = url.openConnection() as HttpURLConnection
-                val `in` = urlConnection.inputStream
-                val reader = InputStreamReader(`in`)
-
-                var data = reader.read()
-                while (data != -1) {
-                    val current = data.toChar()
-                    result += current
-                    data = reader.read()
-                }
-                return result
-
-            } catch (e: MalformedURLException) {
-                e.printStackTrace()
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-
-            return null
-        }
-
-        override fun onPostExecute(result: String?) {
-
-
-            if (result == null || result.equals("", ignoreCase = true)) {
-                Toast.makeText(applicationContext, "Sorry! No such location found", Toast.LENGTH_LONG).show()
+            //check either fields are empty and there is no values entered as "longitude" & "latitude"
+            if (lat.equals("", ignoreCase = true) || lon.equals("", ignoreCase = true)) {
+                Toast.makeText(applicationContext, "Please Enter latitude and longitude to get the forecast!", Toast.LENGTH_LONG).show()
             } else {
-                try {
-                    val jsonObject = JSONObject(result)
-                    val jsonArray = jsonObject.getJSONArray("weather")
-                    var iconUrl: String? = null
-                    var desc: String? = null
-                    val description: String
-                    for (i in 0 until jsonArray.length()) {
-                        iconUrl = jsonArray.getJSONObject(i).getString("icon")
-                        desc = jsonArray.getJSONObject(i).getString("description")
 
-                    }
-                    val chars = desc!!.toCharArray()
-                    chars[0] = Character.toUpperCase(chars[0])
-                    description = String(chars)
-                    val imgUrl = "http://openweathermap.org/img/w/$iconUrl.png"
-                    val tempMin = (java.lang.Float.valueOf(jsonObject.getJSONObject("main").getString("temp_min")) - 272.15).toFloat()
-                    val tempMax = (java.lang.Float.valueOf(jsonObject.getJSONObject("main").getString("temp_max")) - 272.15).toFloat()
-                    val temp = (java.lang.Float.valueOf(jsonObject.getJSONObject("main").getString("temp")) - 272.15).toFloat()
-
-                    DownloadImageTask().execute(imgUrl)
-                    activityMainBinding = DataBindingUtil.setContentView(this@MainActivity, R.layout.activity_main)
-                    val obj = WeatherInfo(description + " (" + temp + DEGREE + "C)", "Min: " + tempMin.toString() + DEGREE + "C", "Max: " + tempMax.toString() + DEGREE + "C")
-                    activityMainBinding!!.weatherInfo = obj
-
-                } catch (x: Exception) {
-                    x.printStackTrace()
-                }
-
+                //calling of method used for fetching data from API
+                getData(lat, lon)
             }
+        }
+        //Hide keyboard from the screen after button click
+        try {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(currentFocus!!.windowToken, 0)
+        } catch (e: Exception) {
         }
 
     }
 
+    internal fun getData(lat: String, lon: String) {
 
+        //initialize retrofit builder to the API
+        val retrofit = Retrofit.Builder()
+                .baseUrl(BaseUrl)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        val service = retrofit.create<WeatherService>(WeatherService::class.java!!)
+
+        //invoking the interface method, passing required attributes
+        val call = service.getCurrentWeatherData(lat, lon, AppId)
+        call.enqueue(object : Callback<WeatherData> {
+
+            //method used to get response from the API
+            override fun onResponse(call: Call<WeatherData>, response: Response<WeatherData>) {
+                if (response.code() == 200) {
+
+                    //mapping json response to our POJO object for deserialization
+                    val weatherData = response.body()
+
+                    //getting UI elements to set the values in it
+                    val desc = findViewById<View>(R.id.tvDescription) as TextView
+                    val tempmin = findViewById<View>(R.id.tvMinTemp) as TextView
+                    val tempmax = findViewById<View>(R.id.tvMaxTemp) as TextView
+
+                    //converting fahrenheit to celsius temperature
+                    val temp = (weatherData!!.main!!.temp) - 272.15
+                    var description = weatherData?.weather?.get(0)?.description
+
+                    //capitalizing the first character of description
+                    val chars = description?.toCharArray()
+                    chars?.set(0, Character.toUpperCase(chars[0]))
+                    description = chars?.let { String(it) }
+
+                    //setting values to the UI
+                    desc.text = description + " (" + temp + DEGREE + "C)"
+                    tempmin.text = (weatherData?.main!!.temp_min - 272.15).toString() + DEGREE + "C"
+                    tempmax.text = (weatherData?.main!!.temp_max - 272.15).toString() + DEGREE + "C"
+
+                    //creating image url for the ICON image
+                    val imgUrl = "http://openweathermap.org/img/w/" + weatherData.weather?.get(0)!!.icon + ".png"
+
+                    //calling async task to download and set the icon image on UI
+                    DownloadImageTask().execute(imgUrl)
+
+                }
+            }
+
+            //method to deal with if we fail to get the response from API
+            override fun onFailure(call: Call<WeatherData>, t: Throwable) {
+                t.printStackTrace()
+                Toast.makeText(applicationContext, "Something went wrong, Please try again!", Toast.LENGTH_LONG).show()
+
+            }
+        })
+    }
+
+
+    //Task to download and set the icon image on UI
     private inner class DownloadImageTask : AsyncTask<String, Void, Bitmap>() {
 
         override fun doInBackground(vararg urls: String): Bitmap? {
             try {
+                //Download the image bitmap
                 return loadImageFromNetwork(urls[0])
             } catch (e: MalformedURLException) {
                 // TODO Auto-generated catch block
@@ -148,6 +147,8 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPostExecute(result: Bitmap) {
 
+            //setting image bitmap On UI
+
             val mImageView = findViewById<View>(R.id.imvIcon) as ImageView
             mImageView.setImageBitmap(result)
         }
@@ -160,41 +161,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    //method to check if phone is connected to the network
     fun isNetworkAvailable(context: Context): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         return connectivityManager.activeNetworkInfo != null && connectivityManager.activeNetworkInfo.isConnected
     }
 
+    //first method to be executed in the start of app
     public override fun onStart() {
         super.onStart()
+        //check if phone is connected to the network
         if (!isNetworkAvailable(applicationContext) == true) {
             Toast.makeText(applicationContext, "No Internet, Please connect to a Network", Toast.LENGTH_LONG).show()
         }
-        Log.d(tag, "In the onStart() event")
+
     }
 
-    public override fun onRestart() {
-        super.onRestart()
-        Log.d(tag, "In the onRestart() event")
+    companion object {
+        var BaseUrl = "http://api.openweathermap.org/"
+        var AppId = "4f6f268a496ed32149b37570e57bef91"
     }
 
-    public override fun onResume() {
-        super.onResume()
-        Log.d(tag, "In the onResume() event")
-    }
-
-    public override fun onPause() {
-        super.onPause()
-        Log.d(tag, "In the onPause() event")
-    }
-
-    public override fun onStop() {
-        super.onStop()
-        Log.d(tag, "In the onStop() event")
-    }
-
-    public override fun onDestroy() {
-        super.onDestroy()
-        Log.d(tag, "In the onDestroy() event")
-    }
 }
