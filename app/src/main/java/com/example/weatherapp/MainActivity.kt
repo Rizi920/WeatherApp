@@ -93,8 +93,8 @@ class MainActivity : AppCompatActivity() {
                     val tempmin = findViewById<View>(R.id.tvMinTemp) as TextView
                     val tempmax = findViewById<View>(R.id.tvMaxTemp) as TextView
 
-                    //converting fahrenheit to celsius temperature
-                    val temp = (weatherData!!.main!!.temp) - 272.15
+                    //converting Kelvin (the API default) to Celsius
+                    val temp = kelvinToCelsius(weatherData!!.main!!.temp)
                     var description = weatherData?.weather?.get(0)?.description
 
                     //capitalizing the first character of description
@@ -104,11 +104,11 @@ class MainActivity : AppCompatActivity() {
 
                     //setting values to the UI
                     desc.text = description + " (" + temp + DEGREE + "C)"
-                    tempmin.text = (weatherData?.main!!.temp_min - 272.15).toString() + DEGREE + "C"
-                    tempmax.text = (weatherData?.main!!.temp_max - 272.15).toString() + DEGREE + "C"
+                    tempmin.text = kelvinToCelsius(weatherData.main!!.temp_min) + DEGREE + "C"
+                    tempmax.text = kelvinToCelsius(weatherData.main!!.temp_max) + DEGREE + "C"
 
                     //creating image url for the ICON image
-                    val imgUrl = "http://openweathermap.org/img/w/" + weatherData.weather?.get(0)!!.icon + ".png"
+                    val imgUrl = "https://openweathermap.org/img/w/" + weatherData.weather?.get(0)!!.icon + ".png"
 
                     //calling async task to download and set the icon image on UI
                     DownloadImageTask().execute(imgUrl)
@@ -178,8 +178,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        var BaseUrl = "http://api.openweathermap.org/"
-        var AppId = "4f6f268a496ed32149b37570e57bef91"
+        /** Converts a Kelvin temperature to Celsius, rounded to one decimal place. */
+        fun kelvinToCelsius(kelvin: Float): String = String.format("%.1f", kelvin - 273.15f)
+
+        var BaseUrl = "https://api.openweathermap.org/"
+        var AppId = BuildConfig.OPEN_WEATHER_API_KEY
     }
 
 }
